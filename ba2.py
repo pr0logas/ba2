@@ -48,6 +48,10 @@ def mongo_send_find_query(connection, query):
     return list(connection.wallets_with_balance.find(query, {"_id": 0, "wallet": 1}))
 
 @autoreconnect_retry
+def mongo_write_generated_private_keys_with_wallets_many(connection, arrayitems):
+    return connection.generated_wallets_with_priv_keys.insert_many(arrayitems)
+
+@autoreconnect_retry
 def mongo_write_generated_private_keys_with_wallets(connection, write_query):
     return connection.generated_wallets_with_priv_keys.insert_one(write_query)
 
@@ -87,33 +91,54 @@ def check_progress():
             pass
         time.sleep(pot_sleep_time)
 
-def start_generator(workernum):
-    start_time = time.time()
+def define_timer():
+    return time.time()
 
+
+def start_generator(workernum):
+    global_start_time = define_timer()
+
+    wallets_creation_time = define_timer()
     result = subprocess.check_output(BIN_PATH,shell=True).strip().splitlines()
+    print(f"--- Worker{workernum} --- wallets creation took: {round((time.time() - wallets_creation_time), 2)} seconds ---")
     db = start_mongo()
 
     all_wallets_tmp = []
+    all_wallets_with_priv_tmp = []
 
+    aggregation_time = define_timer()
     for line in result:
         res = line.decode('utf-8').split(',')
         number = res[0].strip()
         address = res[1].strip()
         private_key = res[2].strip()
+
+        insertion_format_for_mongo = {"wallet" : address, "privkey" : private_key}
+
         all_wallets_tmp.append(address)
+        all_wallets_with_priv_tmp.append(insertion_format_for_mongo)
 
-        write_query = {"wallet": address , "privkey" : private_key}
-        mongo_write_generated_private_keys_with_wallets(db, write_query)
+    wallets_count = len(all_wallets_tmp)
+    formated_wallets_number = f"{wallets_count:,}"
+    print(f"--- Worker{workernum} --- aggregations took: {round((time.time() - aggregation_time), 2)} seconds ---")
 
+    wallets_insertion_time = define_timer()
+    mongo_write_generated_private_keys_with_wallets_many(db, all_wallets_with_priv_tmp)
+    print(f"--- Worker{workernum} --- db inserts took: {round((time.time() - wallets_insertion_time), 2)} seconds ---")
+
+    search_time = define_timer()
     query_result = mongo_send_find_query_many(db, all_wallets_tmp)
+
+    print(f"--- Worker{workernum} --- db search took: {round((time.time() - search_time), 2)} seconds ---")
 
     if query_result != []:
         print(f"Wallet Found! Worker-{workernum} {query_result}")
         write_to_file(FOUNDED_WALLETS_PATH, 'Wallet Found!' + str(query_result) + '\n')
 
 
-    print(f"--- Worker{workernum}--- {(time.time() - start_time)} seconds ---")
+    print(f"--- Worker{workernum} --- ALL processes took: ***{round((time.time() - global_start_time), 2)}*** seconds ({formated_wallets_number} wallets) ---")
     start_generator(workernum)
+
 
 def start_workers():
     if check_if_user_arguments_not_empty():
