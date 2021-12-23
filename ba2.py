@@ -65,31 +65,35 @@ def check_if_user_arguments_not_empty():
 def check_progress():
     time.sleep(10)
     pot_sleep_time = 900
-    db = start_mongo()
-    while True:
-        try:
-            total_wallets = db['generated_wallets_with_priv_keys'].estimated_document_count()
-            formated_number = f"{total_wallets:,}"
-            print(f"/// Total number of wallets in DB: {formated_number} ///")
-            stat = os.stat(FOUNDED_WALLETS_PATH)
-            pot_sleep_time = 5
-            print("")
-            print(f"************************** HONEY POT! ************************************")
-            print(f"*********** Please check the file: {FOUNDED_WALLETS_PATH} ***************")
-            print("")
 
-        except FileNotFoundError:
-            pot_sleep_time = 900
-            print(f"*** Found nothing so far ***")
-            print(f"*** There are only: 1461501637330902918203684832716283019655932542976"
-                  f" possible BTC addresses :) ***")
+    with MongoClient(MONGO_HOST) as client:
+        db = client.btc
+
+        while True:
+            try:
+                total_wallets = db['generated_wallets_with_priv_keys'].estimated_document_count()
+                formated_number = f"{total_wallets:,}"
+                print(f"/// Total number of wallets in DB: {formated_number} ///")
+                stat = os.stat(FOUNDED_WALLETS_PATH)
+                pot_sleep_time = 5
+                print("")
+                print(f"************************** HONEY POT! ************************************")
+                print(f"*********** Please check the file: {FOUNDED_WALLETS_PATH} ***************")
+                print("")
+
+            except FileNotFoundError:
+                pot_sleep_time = 900
+                print(f"*** Found nothing so far ***")
+                print(f"*** There are only: 1461501637330902918203684832716283019655932542976"
+                      f" possible BTC addresses :) ***")
 
 
-        except Exception as e:
-            print(f"<IOwork> Something went wrong. Cannot get {FOUNDED_WALLETS_PATH} modification time!")
-            print(e)
-            pass
-        time.sleep(pot_sleep_time)
+            except Exception as e:
+                print(f"<IOwork> Something went wrong. Cannot get {FOUNDED_WALLETS_PATH} modification time!")
+                print(e)
+                pass
+            time.sleep(pot_sleep_time)
+        client.close()
 
 def define_timer():
     return time.time()
@@ -101,43 +105,48 @@ def start_generator(workernum):
     wallets_creation_time = define_timer()
     result = subprocess.check_output(BIN_PATH,shell=True).strip().splitlines()
     print(f"--- Worker{workernum} --- wallets creation took: {round((time.time() - wallets_creation_time), 2)} seconds ---")
-    db = start_mongo()
 
-    all_wallets_tmp = []
-    all_wallets_with_priv_tmp = []
+    with MongoClient(MONGO_HOST) as client:
+        db = client.btc
 
-    aggregation_time = define_timer()
-    for line in result:
-        res = line.decode('utf-8').split(',')
-        number = res[0].strip()
-        address = res[1].strip()
-        private_key = res[2].strip()
+        all_wallets_tmp = []
+        all_wallets_with_priv_tmp = []
 
-        insertion_format_for_mongo = {"wallet" : address, "privkey" : private_key}
+        aggregation_time = define_timer()
+        for line in result:
+            res = line.decode('utf-8').split(',')
+            number = res[0].strip()
+            address = res[1].strip()
+            private_key = res[2].strip()
 
-        all_wallets_tmp.append(address)
-        all_wallets_with_priv_tmp.append(insertion_format_for_mongo)
+            insertion_format_for_mongo = {"wallet" : address, "privkey" : private_key}
 
-    wallets_count = len(all_wallets_tmp)
-    formated_wallets_number = f"{wallets_count:,}"
-    print(f"--- Worker{workernum} --- aggregations took: {round((time.time() - aggregation_time), 2)} seconds ---")
+            all_wallets_tmp.append(address)
+            all_wallets_with_priv_tmp.append(insertion_format_for_mongo)
 
-    wallets_insertion_time = define_timer()
-    mongo_write_generated_private_keys_with_wallets_many(db, all_wallets_with_priv_tmp)
-    print(f"--- Worker{workernum} --- db inserts took: {round((time.time() - wallets_insertion_time), 2)} seconds ---")
+        wallets_count = len(all_wallets_tmp)
+        formated_wallets_number = f"{wallets_count:,}"
+        print(f"--- Worker{workernum} --- aggregations took: {round((time.time() - aggregation_time), 2)} seconds ---")
 
-    search_time = define_timer()
-    query_result = mongo_send_find_query_many(db, all_wallets_tmp)
+        wallets_insertion_time = define_timer()
+        mongo_write_generated_private_keys_with_wallets_many(db, all_wallets_with_priv_tmp)
+        print(f"--- Worker{workernum} --- db inserts took: {round((time.time() - wallets_insertion_time), 2)} seconds ---")
 
-    print(f"--- Worker{workernum} --- db search took: {round((time.time() - search_time), 2)} seconds ---")
+        search_time = define_timer()
+        query_result = mongo_send_find_query_many(db, all_wallets_tmp)
 
-    if query_result != []:
-        print(f"Wallet Found! Worker-{workernum} {query_result}")
-        write_to_file(FOUNDED_WALLETS_PATH, 'Wallet Found!' + str(query_result) + '\n')
+        print(f"--- Worker{workernum} --- db search took: {round((time.time() - search_time), 2)} seconds ---")
+
+        if query_result != []:
+            print(f"Wallet Found! Worker-{workernum} {query_result}")
+            write_to_file(FOUNDED_WALLETS_PATH, 'Wallet Found!' + str(query_result) + '\n')
 
 
-    print(f"--- Worker{workernum} --- ALL processes took: ***{round((time.time() - global_start_time), 2)}*** seconds ({formated_wallets_number} wallets) ---")
+        print(f"--- Worker{workernum} --- ALL processes took: ***{round((time.time() - global_start_time), 2)}*** seconds ({formated_wallets_number} wallets) ---")
+        
+    client.close()
     start_generator(workernum)
+        
 
 
 def start_workers():

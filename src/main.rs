@@ -9,15 +9,14 @@ use secp256k1::Secp256k1;
 use rand::rngs::OsRng;
 
 mod address;
-const ADDRESS_COUNT: u32  = 10000;
+const ADDRESS_COUNT: u32  = 100001;
 
 fn main(){
 
     let secp256k1 = Secp256k1::new();
+    let mut rng = OsRng::new().expect("OsRng");
     
-
-    for x in 1..ADDRESS_COUNT+1 {
-        let mut rng = OsRng::new().expect("OsRng");
+    for x in 1..ADDRESS_COUNT {
         let (_secret_key, public_key) = secp256k1.generate_keypair(&mut rng);
         let serialized_public_key = public_key.serialize();
 
