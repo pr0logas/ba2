@@ -2,6 +2,7 @@ import subprocess
 import time
 import sys
 import os
+import re
 import json
 import multiprocessing
 import threading
@@ -236,76 +237,72 @@ def check_progress():
                 print(e)
                 pass
             time.sleep(pot_sleep_time)
-        client.close()
 
 def define_timer():
     return time.time()
 
 
 def start_generator(workernum):
-    global_start_time = define_timer()
+    while True:
+        global_start_time = define_timer()
 
-    wallets_creation_time = define_timer()
-    result = subprocess.check_output(BIN_PATH,shell=True).strip().splitlines()
-    print(f"--- Worker{workernum} --- wallets creation took: {round((time.time() - wallets_creation_time), 2)} seconds ---")
+        wallets_creation_time = define_timer()
+        result = subprocess.check_output(BIN_PATH,shell=True).strip().splitlines()
+        print(f"--- Worker{workernum} --- wallets creation took: {round((time.time() - wallets_creation_time), 2)} seconds ---")
 
-    with MongoClient(MONGO_HOST) as client:
-        db = client.btc
+        with MongoClient(MONGO_HOST) as client:
+            db = client.btc
 
-        all_wallets_tmp = []
-        all_wallets_with_priv = []
-        all_wallets_with_priv_tmp = {}
+            all_wallets_tmp = []
+            all_wallets_with_priv = []
+            all_wallets_with_priv_tmp = {}
 
-        aggregation_time = define_timer()
-        for line in result:
-            res = line.decode('utf-8').split(',')
-            _ = res[0].strip()
-            address = res[1].strip()
-            private_key = res[2].strip()
-            privkey_decimal = str(int(private_key, 16))
+            aggregation_time = define_timer()
+            for line in result:
+                res = line.decode('utf-8').split(',')
+                _ = res[0].strip()
+                address = res[1].strip()
+                private_key = res[2].strip()
+                privkey_decimal = str(int(private_key, 16))
 
-            insertion_format_for_mongo = {"wallet" : address, "privkey" : private_key, "privkey_decimal" : privkey_decimal }
+                insertion_format_for_mongo = {"wallet" : address, "privkey" : private_key, "privkey_decimal" : privkey_decimal }
+                all_wallets_tmp.append(address)
+                all_wallets_with_priv_tmp[address] = private_key
 
-            all_wallets_tmp.append(address)
-            all_wallets_with_priv_tmp[address] = private_key
+                if address.startswith(tuple(SPECIFIC_PREFIXES_INT)) \
+                or address.startswith(tuple(SPECIFIC_PREFIXES_UPPER_STRING)) \
+                or address.startswith(tuple(SPECIFIC_PREFIXES_LOWER_STRING)) \
+                or address.startswith(tuple(CUSTOM_SEARCH)) \
+                or address.endswith(tuple(CUSTOM_SEARCH)) \
+                or address.endswith(tuple(SPECIFIC_END_INT)) \
+                or address.endswith(tuple(SPECIFIC_END_UPPER_STRING)) \
+                or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)) \
+                or len(address) <= 30:
+                    print(address)
+                    all_wallets_with_priv.append(insertion_format_for_mongo)
 
-            if address.startswith(tuple(SPECIFIC_PREFIXES_INT)) \
-            or address.startswith(tuple(SPECIFIC_PREFIXES_UPPER_STRING)) \
-            or address.startswith(tuple(SPECIFIC_PREFIXES_LOWER_STRING)) \
-            or address.startswith(tuple(CUSTOM_SEARCH)) \
-            or address.endswith(tuple(CUSTOM_SEARCH)) \
-            or address.endswith(tuple(SPECIFIC_END_INT)) \
-            or address.endswith(tuple(SPECIFIC_END_UPPER_STRING)) \
-            or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)) \
-            or len(address) <= 30:
-                print(address)
-                all_wallets_with_priv.append(insertion_format_for_mongo)
+            wallets_count = len(all_wallets_tmp)
+            formated_wallets_number = f"{wallets_count:,}"
+            wallets_to_be_imported_count = len(all_wallets_with_priv)
+            print(f"--- Worker{workernum} --- aggregations took: {round((time.time() - aggregation_time), 2)} seconds ---")
 
-        wallets_count = len(all_wallets_tmp)
-        formated_wallets_number = f"{wallets_count:,}"
-        wallets_to_be_imported_count = len(all_wallets_with_priv)
-        print(f"--- Worker{workernum} --- aggregations took: {round((time.time() - aggregation_time), 2)} seconds ---")
+            wallets_insertion_time = define_timer()
 
-        wallets_insertion_time = define_timer()
+            if wallets_to_be_imported_count > 0:
+                mongo_write_generated_private_keys_with_wallets_many(db, all_wallets_with_priv)
 
-        if wallets_to_be_imported_count > 0:
-            mongo_write_generated_private_keys_with_wallets_many(db, all_wallets_with_priv)
+            print(f"--- Worker{workernum} --- db inserts took: {round((time.time() - wallets_insertion_time), 2)} seconds ---")
 
-        print(f"--- Worker{workernum} --- db inserts took: {round((time.time() - wallets_insertion_time), 2)} seconds ---")
+            search_time = define_timer()
+            query_result = mongo_send_find_query_many(db, all_wallets_tmp)
+            print(f"--- Worker{workernum} --- db search took: {round((time.time() - search_time), 2)} seconds ---")
 
-        search_time = define_timer()
-        query_result = mongo_send_find_query_many(db, all_wallets_tmp)
-        print(f"--- Worker{workernum} --- db search took: {round((time.time() - search_time), 2)} seconds ---")
+            if query_result != []:
+                print(f"Wallet Found! Worker-{workernum} {query_result} {all_wallets_with_priv_tmp}")
+                write_to_file(FOUNDED_WALLETS_PATH, 'Wallet Found!' + str(query_result) + '\n', json.dumps(all_wallets_with_priv_tmp))
 
-        if query_result != []:
-            print(f"Wallet Found! Worker-{workernum} {query_result} {all_wallets_with_priv_tmp}")
-            write_to_file(FOUNDED_WALLETS_PATH, 'Wallet Found!' + str(query_result) + '\n', json.dumps(all_wallets_with_priv_tmp))
-
-        print(f"--- Worker{workernum} --- ALL processes took: ***{round((time.time() - global_start_time), 2)}*** seconds ({formated_wallets_number}/{wallets_to_be_imported_count} wallets) ---")
-        
-    client.close()
-    start_generator(workernum)
-        
+            print(f"--- Worker{workernum} --- ALL processes took: ***{round((time.time() - global_start_time), 2)}*** seconds ({formated_wallets_number}/{wallets_to_be_imported_count} wallets) ---")
+        client.close()
 
 
 def start_workers():
