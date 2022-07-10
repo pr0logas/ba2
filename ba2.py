@@ -142,7 +142,7 @@ SPECIFIC_END_LOWER_STRING = [
     'wwwww',
     'xxxxx',
     'yyyyy',
-    'zzzzz
+    'zzzzz'
 ]
 
 CUSTOM_SEARCH = [
@@ -259,7 +259,7 @@ def start_generator(workernum):
         aggregation_time = define_timer()
         for line in result:
             res = line.decode('utf-8').split(',')
-            number = res[0].strip()
+            _ = res[0].strip()
             address = res[1].strip()
             private_key = res[2].strip()
             privkey_decimal = str(int(private_key, 16))
@@ -276,7 +276,8 @@ def start_generator(workernum):
             or address.endswith(tuple(CUSTOM_SEARCH)) \
             or address.endswith(tuple(SPECIFIC_END_INT)) \
             or address.endswith(tuple(SPECIFIC_END_UPPER_STRING)) \
-            or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)):
+            or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)) \
+            or len(address) >= 30:
                 print(address)
                 all_wallets_with_priv.append(insertion_format_for_mongo)
 
