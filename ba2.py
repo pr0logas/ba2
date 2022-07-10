@@ -141,13 +141,13 @@ SPECIFIC_END_LOWER_STRING = [
     'vvvvv',
     'wwwww',
     'xxxxx',
-    'yyyyy
+    'yyyyy',
     'zzzzz
 ]
 
 CUSTOM_SEARCH = [
     '123456789',
-    '1987654321,
+    '1987654321',
     '1ABCDEF',
     '1abcdef',
     'ABCDEF',
