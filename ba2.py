@@ -277,7 +277,7 @@ def start_generator(workernum):
             or address.endswith(tuple(SPECIFIC_END_INT)) \
             or address.endswith(tuple(SPECIFIC_END_UPPER_STRING)) \
             or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)) \
-            or len(address) >= 30:
+            or len(address) <= 30:
                 print(address)
                 all_wallets_with_priv.append(insertion_format_for_mongo)
 
