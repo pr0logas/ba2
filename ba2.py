@@ -14,146 +14,7 @@ FOUNDED_WALLETS_PATH='found_wallets.txt'
 BIN_PATH = '/usr/bin/rust-bitcoin-address-generator'
 DEFAULT_CPU_CORES = 1
 
-SPECIFIC_PREFIXES_INT = [
-    '111111',
-    '122222',
-    '133333',
-    '144444',
-    '155555',
-    '166666',
-    '177777',
-    '188888',
-    '199999'
-]
-
-SPECIFIC_PREFIXES_UPPER_STRING = [
-    '1AAAAA',
-    '1BBBBB',
-    '1CCCCC',
-    '1DDDDD',
-    '1EEEEE',
-    '1FFFFF',
-    '1GGGGG',
-    '1HHHHH',
-    '1JJJJJ',
-    '1KKKKK',
-    '1LLLLL',
-    '1MMMMM',
-    '1NNNNN',
-    '1PPPPP',
-    '1QQQQQ',
-    '1RRRRR',
-    '1SSSSS',
-    '1TTTTT',
-    '1UUUUU',
-    '1VVVVV',
-    '1WWWWW',
-    '1XXXXX',
-    '1YYYYY',
-    '1ZZZZZ'
-]
-
-SPECIFIC_PREFIXES_LOWER_STRING = [
-    '1aaaaa',
-    '1bbbbb',
-    '1ccccc',
-    '1ddddd',
-    '1eeeee',
-    '1fffff',
-    '1ggggg',
-    '1hhhhh',
-    '1iiiii',
-    '1jjjjj',
-    '1kkkkk',
-    '1mmmmm',
-    '1nnnnn',
-    '1ppppp',
-    '1qqqqq',
-    '1rrrrr',
-    '1sssss',
-    '1ttttt',
-    '1uuuuu',
-    '1vvvvv',
-    '1wwwww',
-    '1xxxxx',
-    '1yyyyy',
-    '1zzzzz'
-]
-
-SPECIFIC_END_INT = [
-    '11111',
-    '22222',
-    '33333',
-    '44444',
-    '55555',
-    '66666',
-    '77777',
-    '88888',
-    '99999'
-]
-
-SPECIFIC_END_UPPER_STRING = [
-    'AAAAA',
-    'BBBBB',
-    'CCCCC',
-    'DDDDD',
-    'EEEEE',
-    'FFFFF',
-    'GGGGG',
-    'HHHHH',
-    'JJJJJ',
-    'KKKKK',
-    'LLLLL',
-    'MMMMM',
-    'NNNNN',
-    'PPPPP',
-    'QQQQQ',
-    'RRRRR',
-    'SSSSS',
-    'TTTTT',
-    'UUUUU',
-    'VVVVV',
-    'WWWWW',
-    'XXXXX',
-    'YYYYY',
-    'ZZZZZ'
-]
-
-SPECIFIC_END_LOWER_STRING = [
-    'aaaaa',
-    'bbbbb',
-    'ccccc',
-    'ddddd',
-    'eeeee',
-    'fffff',
-    'ggggg',
-    'hhhhh',
-    'iiiii',
-    'jjjjj',
-    'kkkkk',
-    'mmmmm',
-    'nnnnn',
-    'ppppp',
-    'qqqqq',
-    'rrrrr',
-    'sssss',
-    'ttttt',
-    'uuuuu',
-    'vvvvv',
-    'wwwww',
-    'xxxxx',
-    'yyyyy',
-    'zzzzz'
-]
-
-CUSTOM_SEARCH = [
-    '123456789',
-    '1987654321',
-    '1ABCDEF',
-    '1abcdef',
-    'ABCDEF',
-    'abcdef'
-]
+regex = r"(123456789|1987654321|ABCDEF|abcdef|11111|22222|33333|44444|55555|66666|77777|88888|99999|AAAAA|BBBBB|CCCCC|DDDDD|EEEEE|FFFFF|GGGGG|HHHHH|JJJJJ|KKKKK|LLLLL|MMMMM|NNNNN|PPPPP|QQQQQ|RRRRR|SSSSS|TTTTT|UUUUU|VVVVV|WWWWW|XXXXX|YYYYY|ZZZZZ|aaaaa|bbbbb|ccccc|ddddd|eeeee|fffff|ggggg|hhhhh|iiiii|jjjjj|kkkkk|mmmmm|nnnnn|ppppp|qqqqq|rrrrr|sssss|ttttt|uuuuu|vvvvv|wwwww|xxxxx|yyyyy|zzzzz+)"
 
 def start_mongo():
     with MongoClient(MONGO_HOST) as client:
@@ -269,15 +130,8 @@ def start_generator(workernum):
                 all_wallets_tmp.append(address)
                 all_wallets_with_priv_tmp[address] = private_key
 
-                if address.startswith(tuple(SPECIFIC_PREFIXES_INT)) \
-                or address.startswith(tuple(SPECIFIC_PREFIXES_UPPER_STRING)) \
-                or address.startswith(tuple(SPECIFIC_PREFIXES_LOWER_STRING)) \
-                or address.startswith(tuple(CUSTOM_SEARCH)) \
-                or address.endswith(tuple(CUSTOM_SEARCH)) \
-                or address.endswith(tuple(SPECIFIC_END_INT)) \
-                or address.endswith(tuple(SPECIFIC_END_UPPER_STRING)) \
-                or address.endswith(tuple(SPECIFIC_END_LOWER_STRING)) \
-                or len(address) <= 30:
+                match = re.search(regex, address)
+                if match is not None or len(address) <= 30:
                     print(address)
                     all_wallets_with_priv.append(insertion_format_for_mongo)
 
